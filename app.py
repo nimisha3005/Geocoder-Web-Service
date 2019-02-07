@@ -1,44 +1,35 @@
-from flask import Flask, render_template, request
-from flask_sqlalchemy import SQLAlchemy
-from send_email import send_email
-from sqlalchemy.sql import func
+from flask import Flask, render_template, request, send_file
+from geopy.geocoders import Nominatim
+import pandas
+import datetime
 
 app=Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI']='postgresql://postgres:masn@localhost/height_collector'
-db=SQLAlchemy(app)
-
-class Data(db.Model):
-    __tablename__="data"
-    id=db.Column(db.Integer, primary_key=True)
-    email_=db.Column(db.String(120), unique=True)
-    height_=db.Column(db.Integer)
-
-    def __init__(self, email_, height_):
-        self.email_=email_
-        self.height_=height_
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
-@app.route("/success", methods=['POST'])
-def success():
-    if request.method=='POST':
-        email=request.form["email_name"]
-        height=request.form["height_name"]
-        print(email, height)
-        if db.session.query(Data).filter(Data.email_ == email).count()== 0:
-            data=Data(email,height)
-            db.session.add(data)
-            db.session.commit()
-            average_height=db.session.query(func.avg(Data.height_)).scalar()
-            average_height=round(average_height, 1)
-            count = db.session.query(Data.height_).count()
-            send_email(email, height, average_height, count)
-            print(average_height)
-            return render_template("success.html")
-    return render_template('index.html', text="Seems like we got something from that email once!")
+@app.route('/success-table', methods=['POST'])
+def success_table():
+    global filename
+    if request.method=="POST":
+        file=request.files['file']
+        try:
+            df=pandas.read_csv(file)
+            gc=Nominatim(scheme='http')
+            df["coordinates"]=df["Address"].apply(gc.geocode)
+            df['Latitude'] = df['coordinates'].apply(lambda x: x.latitude if x != None else None)
+            df['Longitude'] = df['coordinates'].apply(lambda x: x.longitude if x != None else None)
+            df=df.drop("coordinates",1)
+            filename=datetime.datetime.now().strftime("sample_files/%Y-%m-%d-%H-%M-%S-%f"+".csv")
+            df.to_csv(filename,index=None)
+            return render_template("index.html", text=df.to_html(), btn='download.html')
+        except Exception as e:
+            return render_template("index.html", text=str(e))
 
-if __name__ == '__main__':
-    app.debug=True
-    app.run(port=5005)
+@app.route("/download-file/")
+def download():
+    return send_file(filename, attachment_filename='yourfile.csv', as_attachment=True)
+
+if __name__=="__main__":
+    app.run(debug=True)
