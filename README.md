@@ -1,1 +1,1 @@
-Web Based Financial Graph using Bokeh
+Data Collector Web App using PostGreSQL and Flask
