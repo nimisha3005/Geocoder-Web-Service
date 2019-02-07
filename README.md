@@ -1,1 +1,1 @@
-Webmaps Implementation using Python
+Desktop Application Implementation using Python and with Database Management
